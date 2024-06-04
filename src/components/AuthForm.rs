@@ -1,7 +1,15 @@
+use serde::Serialize;
+use serde_wasm_bindgen::to_value;
+use wasm_bindgen::JsValue;
 use yew::platform::spawn_local;
 use yew::prelude::*;
 
 use crate::gql::authenticate::authenticate;
+
+#[derive(Serialize)]
+struct SaveAuthTokenParams {
+    token: String,
+}
 
 #[function_component(AuthForm)]
 pub fn auth_form() -> Html {
@@ -37,13 +45,19 @@ pub fn auth_form() -> Html {
                     &format!("Username: {}, Password: {}", *username, *password).into(),
                 );
 
-                let auth_response = authenticate(&*username, &*password)
+                let auth_response = authenticate(&username, &password)
                     .await
                     .expect("Couldn't unwrap the auth response");
+                let auth_token = auth_response.authenticate;
 
-                web_sys::console::log_1(
-                    &format!("auth_response: {}", auth_response.authenticate).into(),
-                );
+                web_sys::console::log_1(&format!("auth_response: {}", auth_token).into());
+
+                let params = to_value(&SaveAuthTokenParams { token: auth_token }).unwrap();
+                let result = crate::app::invoke("save_auth_token", params).await;
+
+                // if let Err(err) = result {
+                //     web_sys::console::error_1(&err);
+                // }
             });
         })
     };
