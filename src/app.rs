@@ -5,6 +5,8 @@ use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 use crate::components::AuthForm::AuthForm;
+use crate::components::Main::Main;
+use crate::contexts::user::{UserAction, UserContextType, UserState};
 
 #[wasm_bindgen]
 extern "C" {
@@ -19,12 +21,13 @@ extern "C" {
 
 #[function_component(App)]
 pub fn app() -> Html {
+    // Initialize the state with the reducer
+    let user_state = use_reducer(UserState::default);
+
     html! {
-        <main class="container">
-            <h1>{"Welcome"}</h1>
-            <p>{"To get started with any CommonOS app, you need to be signed in. You also have to pick a folder to sync your files to!"}</p>
-            <AuthForm />
-        </main>
+        <ContextProvider<UserContextType> context={user_state}>
+            <Main />
+        </ContextProvider<UserContextType>>
     }
 }
 
