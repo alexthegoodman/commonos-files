@@ -4,14 +4,18 @@ use web_sys::{MessageEvent, WebSocket};
 use yew::functional::*;
 use yew::prelude::*;
 
-#[function_component(MyComponent)]
-pub fn my_component() -> Html {
+use crate::contexts::user::{UserAction, UserContextType};
+
+#[function_component(SocketExample)]
+pub fn socket_example() -> Html {
+    let user_context = use_context::<UserContextType>().expect("No AuthContext found");
+
     // Use state to hold the WebSocket connection
     let ws = use_state(|| None);
     let ws_ref = ws.clone();
 
     // Effect to establish WebSocket connection
-    use_effect(move || {
+    use_effect_with((), move |_| {
         let ws = WebSocket::new("ws://localhost:4000").unwrap();
 
         let onmessage_callback = Closure::<dyn FnMut(_)>::new(move |e: MessageEvent| {
@@ -36,8 +40,8 @@ pub fn my_component() -> Html {
         Callback::from(move |_| {
             if let Some(ws) = &*ws {
                 let msg = serde_json::json!({
-                    "token": "your_jwt_token",
-                    "event": "eventName",
+                    "Authorization": "Bearer ".to_owned() + &user_context.token.clone().expect("Token not found during socket message"),
+                    "event": "eventName1",
                     "payload": "Hello"
                 })
                 .to_string();

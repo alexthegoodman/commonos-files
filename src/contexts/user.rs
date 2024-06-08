@@ -14,9 +14,7 @@ pub enum UserAction {
 
 impl Default for UserState {
     fn default() -> Self {
-        Self {
-            token: Some(String::new()),
-        }
+        Self { token: None }
     }
 }
 
