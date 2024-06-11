@@ -87,10 +87,7 @@ async fn sync_files(auth_token: String, paths: Vec<PathBuf>, sync_dir: &Path) {
                         .unwrap_or_else(|_| "".to_string());
 
                     // Log the file content
-                    println!(
-                        "Syncing file: {:?} from {:?} with content: {}",
-                        file_name_str, directory_str, file_content
-                    );
+                    println!("Syncing file: {:?} from {:?}", file_name_str, directory_str);
 
                     // logic to upload `file_content` to S3
                     let _ = upload_sync_one_file(
@@ -206,7 +203,7 @@ async fn main() {
             app.manage(AppState { handle });
 
             let auth_token = read_auth_token(&config);
-            let sync_dir = PathBuf::from("C:/Users/alext/CommonOSFiles");
+            let sync_dir = PathBuf::from("C:/Users/alext/CommonOSFiles"); // TODO: save path aside auth file
 
             // Spawn the folder watcher task
             tokio::task::spawn(async move {
