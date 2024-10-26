@@ -7,12 +7,6 @@ pub struct Data {
     pub uploadSync: String,
 }
 
-// #[derive(Deserialize)]
-// pub struct User {
-//     id: String,
-//     name: String,
-// }
-
 #[derive(Serialize)]
 pub struct Vars {
     // id: u32,

@@ -188,11 +188,6 @@ fn read_auth_token(config: &Arc<tauri::Config>) -> String {
 
 #[tokio::main]
 async fn main() {
-    // tauri::Builder::default()
-    //     .invoke_handler(tauri::generate_handler![greet])
-    //     .run(tauri::generate_context!())
-    //     .expect("error while running tauri application");
-
     println!("Initialized CommonOS Files");
 
     tauri::Builder::default()

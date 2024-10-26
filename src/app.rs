@@ -1,10 +1,6 @@
-use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
-use crate::components::AuthForm::AuthForm;
 use crate::components::Main::Main;
 use crate::contexts::user::{UserAction, UserContextType, UserState};
 
@@ -13,11 +9,6 @@ extern "C" {
     #[wasm_bindgen(js_namespace = ["window", "__TAURI__", "tauri"])]
     pub async fn invoke(cmd: &str, args: JsValue) -> JsValue;
 }
-
-// #[derive(Serialize, Deserialize)]
-// struct GreetArgs<'a> {
-//     name: &'a str,
-// }
 
 #[function_component(App)]
 pub fn app() -> Html {
