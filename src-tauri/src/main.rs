@@ -8,8 +8,10 @@
 
 mod gql;
 
+use lazy_static::lazy_static;
 use notify::EventKind;
 use std::fs;
+use tauri::api::path::document_dir;
 // use tauri::api::path::{app_data_dir, local_data_dir};
 use tauri::api::path::{app_data_dir, resolve_path, BaseDirectory};
 
@@ -112,14 +114,50 @@ async fn sync_files(auth_token: String, paths: Vec<PathBuf>, sync_dir: &Path) {
     }
 }
 
+use tokio::task::JoinHandle;
+
+// Global state to track the current watcher task
+lazy_static! {
+    static ref CURRENT_WATCHER: Arc<Mutex<Option<JoinHandle<()>>>> = Arc::new(Mutex::new(None));
+}
+
+fn spawn_watcher(auth_token: String) {
+    // Get the sync directory
+    let sync_dir = document_dir()
+        .expect("Couldn't get Documents directory")
+        .join("CommonOS");
+
+    // Clone the CURRENT_WATCHER reference for use in async block
+    let watcher_handle = CURRENT_WATCHER.clone();
+
+    // Spawn the new watcher task
+    tokio::task::spawn(async move {
+        // Cancel the previous task if it exists
+        let mut current = watcher_handle.lock().expect("Couldn't get watcher handle");
+        if let Some(handle) = current.take() {
+            println!("Cancelling previous folder watcher...");
+            handle.abort();
+        }
+
+        // Create and store the new task
+        let new_handle = tokio::task::spawn(async move {
+            println!("Starting Folder Watch... {:?}", sync_dir);
+            if let Err(e) = watch_folder(auth_token, sync_dir).await {
+                println!("Error watching folder: {:?}", e);
+            }
+        });
+
+        *current = Some(new_handle);
+    });
+}
+
 async fn watch_folder(auth_token: String, sync_dir: PathBuf) -> notify::Result<()> {
     let (tx, rx) = unbounded();
     let watcher_config = Config::default()
-        .with_poll_interval(std::time::Duration::from_secs(2))
+        .with_poll_interval(Duration::from_secs(2))
         .with_compare_contents(true);
     let mut watcher: RecommendedWatcher = Watcher::new(
         move |res| {
-            // Block on sending the result through the async channel
             tokio::task::block_in_place(|| {
                 tx.send_blocking(res).unwrap();
             });
@@ -132,16 +170,20 @@ async fn watch_folder(auth_token: String, sync_dir: PathBuf) -> notify::Result<(
     // Pin the receiver
     let pinned_rx = Box::pin(rx);
 
-    // Spawn the directory watcher as an async task
-    tokio::task::spawn(async move {
+    // Store the watch_directory task handle
+    let watch_handle = tokio::task::spawn(async move {
         watch_directory(pinned_rx, auth_token, sync_dir).await;
     });
 
-    // Keep the main function alive to listen for events
-    loop {
-        // task::sleep(std::time::Duration::from_secs(60)).await;
-        sleep(Duration::from_secs(60)).await;
+    // Wait for the task to complete or be cancelled
+    tokio::select! {
+        _ = watch_handle => {},
+        _ = tokio::signal::ctrl_c() => {
+            // Clean shutdown logic here if needed
+        },
     }
+
+    Ok(())
 }
 
 struct AppState {
@@ -157,16 +199,22 @@ fn save_auth_token(state: tauri::State<'_, AppState>, token: String) -> Result<(
 
     println!("save_auth_token");
 
-    let app_data_path = app_data_dir(&config).ok_or("Failed to get AppData directory")?;
-    let save_path = app_data_path.join("auth");
+    // let app_data_path = app_data_dir(&config).ok_or("Failed to get AppData directory")?;
+    let sync_dir = document_dir()
+        .expect("Couldn't get Documents directory")
+        .join("CommonOS");
+    let save_path = sync_dir.join("auth");
 
     if let Some(parent) = save_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
 
-    std::fs::write(save_path, token)
+    std::fs::write(save_path, token.clone())
         .map_err(|e| e.to_string())
         .expect("Failed to create auth file");
+
+    // spawns on either startup or on save token
+    spawn_watcher(token.clone());
 
     Ok(())
 }
@@ -174,10 +222,13 @@ fn save_auth_token(state: tauri::State<'_, AppState>, token: String) -> Result<(
 fn read_auth_token(config: &Arc<tauri::Config>) -> String {
     println!("read_auth_token");
 
-    let app_data_path = app_data_dir(config)
-        .ok_or("Failed to get AppData directory (1)")
-        .expect("Failed to get AppData directory (2)");
-    let read_path = app_data_path.join("auth");
+    // let app_data_path = app_data_dir(config)
+    //     .ok_or("Failed to get AppData directory (1)")
+    //     .expect("Failed to get AppData directory (2)");
+    let sync_dir = document_dir()
+        .expect("Couldn't get Documents directory")
+        .join("CommonOS");
+    let read_path = sync_dir.join("auth");
 
     // pull String content from read_path
     let auth_data =
@@ -197,17 +248,13 @@ async fn main() {
 
             app.manage(AppState { handle });
 
+            // this gets stale
             let auth_token = read_auth_token(&config);
-            let sync_dir = PathBuf::from("C:/Users/alext/CommonOSFiles"); // TODO: save path aside auth file
 
-            // Spawn the folder watcher task
-            tokio::task::spawn(async move {
-                println!("Starting Folder Watch...");
-
-                if let Err(e) = watch_folder(auth_token, sync_dir).await {
-                    println!("Error watching folder: {:?}", e);
-                }
-            });
+            if (auth_token.len() > 0) {
+                // spawns on either startup or on save token
+                spawn_watcher(auth_token);
+            }
 
             Ok(())
         })
